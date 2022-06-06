@@ -2,6 +2,7 @@ use std::error::Error;
 
 mod server;
 
-fn main() -> Result<(), Box<dyn Error>> {
-    server::run()
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
+    server::run().await
 }

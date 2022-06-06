@@ -1,19 +1,39 @@
-use std::{error::Error, net::{SocketAddr, TcpListener}, io::{Read, Write}};
+use std::{error::Error, net::SocketAddr};
 
-pub fn run() -> Result<(), Box<dyn Error>> {
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::{TcpListener, TcpStream},
+};
+
+pub async fn run() -> Result<(), Box<dyn Error>> {
     let addr: SocketAddr = "0.0.0.0:8080".parse()?;
-    let listener = TcpListener::bind(addr)?;
+    let listener = TcpListener::bind(addr).await?;
     println!("Linstening on http://{addr}");
-    
-    for stream in listener.incoming() {
-        let mut buffer = [0; 1024];
-        let mut stream = stream.unwrap();
-        stream.read(&mut buffer).unwrap(); //block until receive
-        println!("{}", String::from_utf8(Vec::from(buffer))?);
-        stream.write_all(b"HTTP/1.1 200 OK\r\n\r\n")?;
-        stream.write_all(b"Hello from server")?;
-        break;
+
+    loop {
+        let (stream, _) = listener.accept().await?;
+        tokio::task::spawn(async move {
+            if let Err(err) = handle_connection(stream).await {
+                eprintln!("Error handle connection {}", err)
+            }
+        });
     }
-    println!("Closing connection from {addr}");
+}
+
+async fn handle_connection(mut stream: TcpStream) -> Result<(), Box<dyn Error>> {
+    let mut buffer = [0; 1024];
+    let read = stream.read(&mut buffer).await?;
+    let mut vec = Vec::new();
+    vec.extend_from_slice(&buffer[..read]); 
+    println!("{}", String::from_utf8(vec)?);
+    write_response(stream).await?;
+
+    Ok(())
+}
+
+async fn write_response(mut stream: TcpStream) -> Result<(), Box<dyn Error>> {
+    stream.write_all(b"HTTP/1.1 200 OK\r\n").await?;
+    stream.write_all(b"\r\n").await?;
+    stream.write_all(b"Hello from plaque!\n").await?;
     Ok(())
 }
